@@ -1,0 +1,41 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the SKMD paper below."
+title: "Stein Kernelized Molecular Dynamics"
+abstract: "LAMMPS implementation (fix skmd) of Stein kernelized molecular dynamics (SKMD), an enhanced sampling method for active learning of machine learning interatomic potentials."
+type: software
+license: GPL-2.0-only
+repository-code: "https://github.com/Fraser-Birks/skmd-lammps"
+version: "1.0.0"
+authors:
+  - given-names: Joanna
+    family-names: Zou
+    affiliation: "Center for Computational Science & Engineering, MIT"
+  - given-names: Fraser
+    family-names: Birks
+    affiliation: "Warwick Centre for Predictive Modelling, University of Warwick; Max Planck Institute for Polymer Research"
+  - given-names: Dallas
+    family-names: Foster
+    affiliation: "NVIDIA"
+  - given-names: Youssef
+    family-names: Marzouk
+    affiliation: "Center for Computational Science & Engineering, MIT"
+keywords:
+  - molecular dynamics
+  - LAMMPS
+  - Stein variational gradient descent
+  - active learning
+  - machine learning interatomic potentials
+preferred-citation:
+  type: conference-paper
+  title: "Stein Kernelized Molecular Dynamics for Active Learning of Interatomic Potentials"
+  collection-title: "Advances in Neural Information Processing Systems (NeurIPS 2026)"
+  year: 2026
+  authors:
+    - given-names: Joanna
+      family-names: Zou
+    - given-names: Fraser
+      family-names: Birks
+    - given-names: Dallas
+      family-names: Foster
+    - given-names: Youssef
+      family-names: Marzouk

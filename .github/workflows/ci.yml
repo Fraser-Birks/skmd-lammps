@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  # Plugin route: LAMMPS (PLUGIN package, shared lib) + fixskmdplugin.so,
+  # kernel unit tests, and a short LJ smoke run that loads the plugin.
+  plugin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libopenmpi-dev openmpi-bin python3-numpy
+
+      - name: Download LAMMPS source
+        run: git clone --depth=1 --branch=stable https://github.com/lammps/lammps.git lammps_src
+
+      - name: Build LAMMPS (MPI, shared, PLUGIN)
+        run: |
+          cmake -S lammps_src/cmake -B lammps_src/build \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D BUILD_MPI=yes \
+            -D BUILD_SHARED_LIBS=yes \
+            -D PKG_PLUGIN=yes
+          cmake --build lammps_src/build -j4
+
+      - name: Build plugin and kernel tests
+        run: |
+          cmake -S cmake -B build \
+            -D LAMMPS_SOURCE_DIR="$GITHUB_WORKSPACE/lammps_src/src" \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D SKMD_TESTING=ON
+          cmake --build build -j4
+
+      - name: Run kernel tests
+        run: ./build/test_kernel
+
+      - name: Smoke test (plugin load)
+        run: tests/smoke/run_smoke.sh lammps_src/build/lmp build/fixskmdplugin.so
+
+      - name: Force check vs reference (1 and 2 MPI ranks)
+        run: |
+          python3 tests/force/check_force.py --lmp "mpirun -np 1 $PWD/lammps_src/build/lmp" --plugin build/fixskmdplugin.so
+          python3 tests/force/check_force.py --lmp "mpirun --oversubscribe -np 2 $PWD/lammps_src/build/lmp" --plugin build/fixskmdplugin.so
+
+  # In-tree route: src/install.sh + LAMMPS with KOKKOS (Serial backend), so
+  # that fix skmd/kk is compiled and exercised with -sf kk.
+  in-tree-kokkos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libopenmpi-dev openmpi-bin python3-numpy
+
+      - name: Download LAMMPS source
+        run: git clone --depth=1 --branch=stable https://github.com/lammps/lammps.git lammps_src
+
+      - name: Install fix skmd in-tree
+        run: src/install.sh lammps_src
+
+      - name: Build LAMMPS (MPI, KOKKOS/Serial)
+        run: |
+          cmake -S lammps_src/cmake -B lammps_src/build \
+            -D CMAKE_BUILD_TYPE=Release \
+            -D BUILD_MPI=yes \
+            -D PKG_KOKKOS=yes \
+            -D Kokkos_ENABLE_SERIAL=yes
+          cmake --build lammps_src/build -j4
+
+      - name: Smoke test (fix skmd, in-tree)
+        run: tests/smoke/run_smoke.sh lammps_src/build/lmp none
+
+      - name: Smoke test (fix skmd/kk via -sf kk)
+        run: tests/smoke/run_smoke.sh lammps_src/build/lmp none -k on -sf kk
+
+      - name: Force check vs reference (in-tree, 2 ranks, plain and -sf kk)
+        run: |
+          python3 tests/force/check_force.py --lmp "mpirun --oversubscribe -np 2 $PWD/lammps_src/build/lmp"
+          python3 tests/force/check_force.py --lmp "mpirun --oversubscribe -np 2 $PWD/lammps_src/build/lmp" -- -k on -sf kk

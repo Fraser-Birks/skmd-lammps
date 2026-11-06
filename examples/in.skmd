@@ -1,0 +1,39 @@
+# Minimal SKMD input with a MACE model via symmetrix.
+#   lmp -in in.skmd -var model my-mace.json -var data system.data -var elements "Si" -var dataset skmd_dataset
+# Reference set: <dataset>_{qs,fs,jacs}.skdat (missing files = zero bias).
+
+variable        model    index model.json
+variable        data     index system.data
+variable        elements index Si
+variable        dataset  index skmd_dataset
+variable        T        index 300.0        # K
+variable        seed     index 12345
+
+# plugin load    /path/to/fixskmdplugin.so   # plugin build only
+
+units           metal
+atom_style      atomic
+atom_modify     map yes                     # required by the symmetrix computes
+boundary        p p p
+read_data       ${data}                     # atom IDs must be 1..N
+mass            * 28.086                    # set per type for your system
+
+# single rank: pair_style symmetrix/mace no_domain_decomposition
+pair_style      symmetrix/mace
+pair_coeff      * * ${model} ${elements}
+
+# descriptors and their Jacobian
+compute         desc all symmetrix/mace/atom  ${model} ${elements}
+compute         jac  all symmetrix/maced/atom ${model} ${elements}
+
+# a = 1, adaptive b in [0.5, 20]; stop when ||F_SKMD|| < 0.05 eV/A after 200 steps
+fix             skmd all skmd desc jac ${dataset} 1.0 adaptive &
+                b_min 0.5 b_max 20.0 thresh 0.05 buffer 200
+
+# overdamped dynamics
+timestep        0.0001                      # ps
+fix             bd all brownian ${T} ${seed} gamma_t 1.0
+
+thermo_style    custom step temp pe f_skmd[1] f_skmd[2] f_skmd[3] f_skmd[4]
+thermo          100
+run             10000

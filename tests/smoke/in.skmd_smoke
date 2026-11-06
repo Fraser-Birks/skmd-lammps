@@ -1,0 +1,38 @@
+# CI smoke test for fix skmd: Lennard-Jones toy system, no MACE/symmetrix needed.
+# A per-atom array compute (property/atom x y z) stands in for the descriptor.
+# run_smoke.sh writes pre.in, which contains `plugin load <path>` when
+# testing the plugin build and is empty for an in-tree build.
+
+include         pre.in
+
+units           lj
+atom_style      atomic
+atom_modify     map yes
+lattice         fcc 0.8442
+region          box block 0 2 0 2 0 2
+create_box      1 box
+create_atoms    1 box
+mass            1 1.0
+velocity        all create 1.0 87287 loop geom
+
+pair_style      lj/cut 2.5
+pair_coeff      1 1 1.0 1.0 2.5
+
+compute         q   all property/atom x y z
+compute         jac all property/atom fx fy fz
+
+fix             nve all nve
+
+# 1) fixed b, threshold check after a 5-step buffer; thresh is huge so the
+#    run must stop early at step 5 ("threshold met")
+fix             skmd all skmd q jac smoke 1.0 100.0 thresh 1.0e6 buffer 5
+thermo_style    custom step pe f_skmd f_skmd[1] f_skmd[2] f_skmd[3] f_skmd[4]
+thermo          1
+run             20
+print           "SMOKE fnorm=$(f_skmd) b=$(f_skmd[2]) triggered=$(f_skmd[3])"
+unfix           skmd
+
+# 2) adaptive b (median pairwise descriptor distance = 5), clamped by b_max
+fix             skmd all skmd q jac smoke 1.0 adaptive b_max 50.0 b_min 0.1
+run             5
+print           "SMOKE adaptive b=$(f_skmd[2])"
